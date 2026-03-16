@@ -11,6 +11,35 @@ Use this skill when the user wants to add a new organization to the multistore a
 
 ---
 
+## Pre-flight Checks (MUST pass before doing anything else)
+
+Run these two checks immediately. If either fails, **stop and inform the user** — do not create any files or folders.
+
+### Check 1: Supabase MCP Connection
+
+Verify the Supabase MCP server is reachable by calling:
+
+```
+mcp: list_organizations
+```
+
+- **If it responds** (even with an empty list): connection is active. Proceed.
+- **If it throws an error or times out**: stop and inform the user:
+  > "The Supabase MCP server is not reachable. Please make sure the MCP server is running and configured in your Claude Code settings before using this skill."
+
+### Check 2: Required Fields in Input JSON
+
+After reading the JSON, verify these two fields are present and non-empty:
+- `supabase_url`
+- `supabase_key`
+
+If either is missing or empty, stop and inform the user:
+> "Cannot proceed: `supabase_url` and `supabase_key` are required. Please add them to your JSON and try again."
+
+**Do not create any files, folders, or database resources until both checks pass.**
+
+---
+
 ## Step 0: Read and Validate Input
 
 The user will pass either:
@@ -46,14 +75,35 @@ The user will pass either:
   },
   "eas": {
     "projectId": "expo-eas-uuid"
-  },
-  "iconFileName": "storename.png",
-  "loginImageFileName": "storenameNoBack.png",
-  "backgroundImageFileName": "freshmarket.png"
+  }
 }
 ```
 
+> **Note:** `iconFileName`, `loginImageFileName`, and `backgroundImageFileName` are no longer needed — image filenames are derived automatically from the store name (see Step 0.1).
+
 Read the JSON file using the Read tool or parse it from the user's message.
+
+### Step 0.1: Extract and Normalize the Store Name
+
+The `name` field in the JSON may contain the store name followed by an address (e.g., `"Antillana - 490 W 207th St, New York, NY 10034"`). You must extract only the store name.
+
+**Rules:**
+1. If `name` contains ` - ` (space-dash-space), take everything **before** the first ` - `.
+2. If `name` contains a comma followed by a city/state pattern (e.g., `"Store, New York, NY"`), take everything **before** the first comma.
+3. Otherwise, use `name` as-is.
+4. Trim any trailing whitespace from the result.
+
+**Examples:**
+- `"Antillana - 490 W 207th St, New York, NY 10034"` → `STORE_NAME = "Antillana"`
+- `"Fresh Market, Brooklyn, NY"` → `STORE_NAME = "Fresh Market"`
+- `"La Placita"` → `STORE_NAME = "La Placita"`
+
+**Derived values** (compute once, use throughout):
+- `STORE_NAME` — the clean store name (e.g., `Antillana`)
+- `STORE_NAME_LOWER` — lowercase, spaces replaced with hyphens (e.g., `antillana`)
+- `CONFIG_NAME` — `"{STORE_NAME} Marketplace"` (e.g., `"Antillana Marketplace"`)
+- `ICON_FILE` — `"{STORE_NAME_LOWER}.png"` (e.g., `antillana.png`)
+- `LOGIN_FILE` — `"{STORE_NAME_LOWER}NoBack.png"` (e.g., `antillanaNoBack.png`)
 
 ---
 
@@ -77,11 +127,16 @@ Create `configs/organizationN.js` following the exact structure of existing file
 
 All asset paths use the pattern `./assets/organizationN/filename.ext`.
 
+Use the derived values from Step 0.1:
+- `name` field → `CONFIG_NAME` (e.g., `"Antillana Marketplace"`)
+- Icon/backgroundImage/iconHeader → `ICON_FILE` (e.g., `antillana.png`)
+- loginImage → `LOGIN_FILE` (e.g., `antillanaNoBack.png`)
+
 Template:
 
 ```js
 module.exports = {
-  name: "<name from input>",
+  name: "<CONFIG_NAME>",
   storeId_supabase: <storeId_supabase>,
   organizations: [
     // Array from input
@@ -95,17 +150,17 @@ module.exports = {
   owner: "xcircular",
   bundleIdentifier: "<bundleIdentifier>",
   package: "<package>",
-  icon: "./assets/organizationN/<iconFileName>",
-  backgroundImage: "./assets/organizationN/<backgroundImageFileName>",
-  loginImage: "./assets/organizationN/<loginImageFileName>",
-  iconHeader: "./assets/organizationN/<iconFileName>",
+  icon: "./assets/organizationN/<ICON_FILE>",
+  backgroundImage: "./assets/organizationN/<ICON_FILE>",
+  loginImage: "./assets/organizationN/<LOGIN_FILE>",
+  iconHeader: "./assets/organizationN/<ICON_FILE>",
   googleServicesFile: "./google-service/organizationN/google-services.json",
   adaptiveIcon: {
-    foregroundImage: "./assets/organizationN/<iconFileName>",
+    foregroundImage: "./assets/organizationN/<ICON_FILE>",
     backgroundColor: "<adaptiveIcon.backgroundColor>",
   },
   splash: {
-    image: "./assets/organizationN/<iconFileName>",
+    image: "./assets/organizationN/<ICON_FILE>",
     imageWidth: 200,
     resizeMode: "contain",
     backgroundColor: "<splash.backgroundColor>",
@@ -125,7 +180,7 @@ module.exports = {
 };
 ```
 
-Replace `N` with the actual org number throughout.
+Replace `N` with the actual org number and all placeholders with derived values throughout.
 
 ---
 
@@ -138,61 +193,22 @@ mkdir -p assets/organizationN
 ```
 
 Inform the user: "The assets folder `assets/organizationN/` has been created. Please add these image files:
-- `<iconFileName>` (app icon)
-- `<loginImageFileName>` (login screen image, transparent background)
-- `<backgroundImageFileName>` (background image)"
+- `<ICON_FILE>` (app icon and background image — e.g., `antillana.png`)
+- `<LOGIN_FILE>` (login screen image with transparent background — e.g., `antillanaNoBack.png`)"
 
 ---
 
-## Step 4: Set Up Google Service File
+## Step 4: Set Up Google Service Folder
 
-Create the google-service directory and place the JSON:
+Create the google-service directory for this organization — **empty, nothing inside**:
 
 ```bash
 mkdir -p google-service/organizationN
 ```
 
-If the user provided a `google-services.json` file path, copy it:
+That's all. Do not create any files inside this folder.
 
-```bash
-cp <provided-path> google-service/organizationN/google-services.json
-```
-
-If the user did NOT provide a google-services.json, create a placeholder and inform them:
-
-```json
-{
-  "project_info": {
-    "project_number": "REPLACE_ME",
-    "project_id": "REPLACE_ME",
-    "storage_bucket": "REPLACE_ME"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "REPLACE_ME",
-        "android_client_info": {
-          "package_name": "<package from input>"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "REPLACE_ME"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
-```
-
-Warn: "A placeholder `google-services.json` was created at `google-service/organizationN/`. Replace `REPLACE_ME` values with real Firebase data before building for production."
+Inform the user: "The folder `google-service/organizationN/` has been created. Add your `google-services.json` file there before building."
 
 ---
 
@@ -318,17 +334,25 @@ If the table is empty, remind the user:
 
 ---
 
-## Step 7: Run the App for Visual Verification
+## Step 7: Build and Run the App
 
-Once all files are in place, launch the app with the new organization:
+Once all files are in place, run these two commands sequentially. Replace `N` with the org number from Step 1.
+
+**7.1 — Prebuild for iOS:**
 
 ```bash
-ORGANIZATION=organizationN npx expo start --clear
+ORGANIZATION=organizationN yarn prebuild:ios
 ```
 
-Where `N` is the org number determined in Step 1.
+Wait for this to complete before continuing.
 
-Inform the user: "Starting the app with `ORGANIZATION=organizationN`. Scan the QR code with Expo Go to verify the new organization loads correctly."
+**7.2 — Launch on iOS simulator:**
+
+```bash
+ORGANIZATION=organizationN yarn ios
+```
+
+Inform the user: "Running prebuild and launching the app with `ORGANIZATION=organizationN`. Check the iOS simulator to verify the new organization loads correctly."
 
 ---
 
@@ -339,18 +363,19 @@ After completing all steps, provide a summary:
 ```
 ✓ Config file created:        configs/organizationN.js
 ✓ Assets folder created:      assets/organizationN/
-✓ Google service folder:      google-service/organizationN/google-services.json
+✓ Google service folder:      google-service/organizationN/ (empty — add google-services.json manually)
 ? Supabase project found:     [Found via MCP / Not found — create manually]
 ? SQL schema applied:         [Migration applied / Already existed / Failed]
 ? Edge functions deployed:    [6/6 deployed / X/6 deployed]
 ? Secrets configured:         [Set via MCP / Pending manual action in Dashboard]
 ? Stores table:               [N stores found / Empty — needs manual data]
-✓ App launched:               ORGANIZATION=organizationN npx expo start --clear
+✓ Prebuild iOS:               ORGANIZATION=organizationN yarn prebuild:ios
+✓ App launched:               ORGANIZATION=organizationN yarn ios
 ```
 
 **Pending manual actions (remind the user):**
 - Add image assets to `assets/organizationN/`
-- Replace placeholder values in `google-service/organizationN/google-services.json` if applicable
+- Add `google-services.json` to `google-service/organizationN/`
 - Set edge function secrets: `EVENTS_FUNCTION_API_KEY` and `EXPO_ACCESS_TOKEN`
 - Add store records to the Supabase `stores` table matching `id_store_supabase` UUIDs in config
 
@@ -358,8 +383,8 @@ After completing all steps, provide a summary:
 
 ## Notes
 
-- Never skip creating the `google-service/organizationN/` folder — the app will crash at build time without it.
+- Never skip creating the `google-service/organizationN/` folder — the app will crash at build time without it. Create the folder only, no files inside.
 - The `owner` field is always `"xcircular"` — do not change it.
 - `appdefinition.colors.text` always uses `dark: "#ffffff"` and `light: "#000000"` — do not customize unless explicitly asked.
 - `imageWidth` in `splash` is always `200` — do not change it.
-- Asset filenames must exactly match what the user specifies — they are case-sensitive on Linux build servers.
+- Asset filenames are derived from the store name and are case-sensitive on Linux build servers.

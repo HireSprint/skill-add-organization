@@ -81,7 +81,7 @@ The JSON format is the same as always — no new fields are required. The `name`
     "darkBackgroundColor": "#121212"
   },
   "eas": {
-    "projectId": "expo-eas-uuid"
+    "projectId": ""
   }
 }
 ```
@@ -186,7 +186,7 @@ module.exports = {
     darkBackgroundColor: "<splash.darkBackgroundColor>",
   },
   eas: {
-    projectId: "<eas.projectId>",
+    projectId: "",
   },
   appdefinition: {
     colors: {
@@ -411,7 +411,9 @@ Confirm to the user which UUIDs were inserted (or reused) and how the `organizat
 
 ## Step 7: Build and Run the App
 
-Once all files are in place, run these two commands sequentially. Replace `N` with the org number from Step 1.
+Once all files are in place, run these commands sequentially in the terminal. Replace `N` with the org number from Step 1.
+
+### iOS
 
 **7.1 — Prebuild for iOS:**
 
@@ -419,7 +421,7 @@ Once all files are in place, run these two commands sequentially. Replace `N` wi
 ORGANIZATION=organizationN yarn prebuild:ios
 ```
 
-Wait for this to complete before continuing.
+Wait for this to complete before continuing. This regenerates the native iOS project files from the JS config.
 
 **7.2 — Launch on iOS simulator:**
 
@@ -427,7 +429,49 @@ Wait for this to complete before continuing.
 ORGANIZATION=organizationN yarn ios
 ```
 
-Inform the user: "Running prebuild and launching the app with `ORGANIZATION=organizationN`. Check the iOS simulator to verify the new organization loads correctly."
+Inform the user:
+> "Prebuild iOS complete. Launching `organizationN` in the iOS simulator — check that the app opens correctly."
+
+---
+
+### Android
+
+**7.3 — Verify `google-services.json` before prebuild:**
+
+Check that the file exists at:
+
+```
+google-service/organizationN/google-services.json
+```
+
+Use the Glob tool to verify:
+
+```
+google-service/organizationN/google-services.json
+```
+
+- **If the file exists:** proceed to 7.4.
+- **If the file is missing:** stop and ask the user:
+  > "I need the `google-services.json` file before running the Android prebuild. Please provide it and I'll place it in `google-service/organizationN/` and continue."
+
+Do **not** run `yarn prebuild:android` until this file is confirmed present.
+
+**7.4 — Prebuild for Android:**
+
+```bash
+ORGANIZATION=organizationN yarn prebuild:android
+```
+
+Wait for this to complete before continuing.
+
+**7.5 — Launch on Android emulator:**
+
+```bash
+ORGANIZATION=organizationN yarn android
+```
+
+Inform the user:
+> "Prebuild Android complete. Launching `organizationN` in the Android emulator — check that the app opens correctly."
 
 ---
 
@@ -448,7 +492,9 @@ After completing all steps, provide a summary:
   - ...
 ✓ Config updated:              organizations[] now has N entries with id_store_supabase UUIDs
 ✓ Prebuild iOS:                ORGANIZATION=organizationN yarn prebuild:ios
-✓ App launched:                ORGANIZATION=organizationN yarn ios
+✓ App launched (iOS):          ORGANIZATION=organizationN yarn ios
+✓ Prebuild Android:            ORGANIZATION=organizationN yarn prebuild:android
+✓ App launched (Android):      ORGANIZATION=organizationN yarn android
 ```
 
 **Pending manual actions (remind the user):**

@@ -297,27 +297,32 @@ If tables already exist, inform the user and skip to 6.2 (they may have already 
 
 ### 6.2 Deploy Edge Functions
 
-Read each edge function source file and deploy via MCP. The source files are in `script supabase/scripts/edge-functions/`.
+The source code for all 6 edge functions lives inside this skill project, in the `edge-functions/` folder. Read each file and deploy it using the MCP.
 
-Deploy each function using:
+For each function, first read the file:
+```
+Read: edge-functions/<function_name>/index.ts
+```
+
+Then deploy using:
 ```
 mcp: deploy_edge_function
   project_ref: <PROJECT_REF>
   name: <function_name>
-  entrypoint_path: script supabase/scripts/edge-functions/<function_name>/index.ts
+  files: [{ name: "index.ts", content: <file contents> }]
   verify_jwt: <true|false>
 ```
 
 Deploy all 6 functions with these settings:
 
-| Function name         | verify_jwt |
-|-----------------------|------------|
-| `create-store-folders`| `true`     |
-| `loyalty-barcodes`    | `true`     |
-| `send-notification`   | `true`     |
-| `delete-account`      | `true`     |
-| `create-event`        | `false`    |
-| `updateShoppingStatus`| `false`    |
+| Function name          | File path                                      | verify_jwt |
+|------------------------|------------------------------------------------|------------|
+| `create-store-folders` | `edge-functions/create-store-folders/index.ts` | `true`     |
+| `loyalty-barcodes`     | `edge-functions/loyalty-barcodes/index.ts`     | `true`     |
+| `send-notification`    | `edge-functions/send-notification/index.ts`    | `true`     |
+| `delete-account`       | `edge-functions/delete-account/index.ts`       | `true`     |
+| `create-event`         | `edge-functions/create-event/index.ts`         | `false`    |
+| `updateShoppingStatus` | `edge-functions/updateShoppingStatus/index.ts` | `false`    |
 
 ### 6.3 Set required secrets
 

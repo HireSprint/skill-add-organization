@@ -1,7 +1,7 @@
 {
   "name": "add-organization",
   "description": "Creates org config files, sets up google-service folders, provisions Supabase resources, and launches the app for verification.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": {
     "name": "Josue Sanchez"
   },

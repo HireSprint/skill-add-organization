@@ -262,6 +262,28 @@ If the file is listed, the copy succeeded. Inform the user:
 
 If the copy fails, show the error and stop.
 
+### Step 3.1: Register image in `useOrganization`
+
+After copying the logo, find the `useOrganization` file in the project:
+
+```
+Glob: **/useOrganization.{js,ts,tsx,jsx}
+```
+
+**If not found:** inform the user:
+> "`useOrganization` file not found. Please register the image manually."
+> Then continue to Step 4.
+
+**If found:** read the file and identify the pattern used to register images for existing organizations. Look for how other organizations map their image assets (e.g., `require(...)`, `import`, object keys, switch cases, or similar).
+
+Then add a new entry for this organization following **exactly the same pattern**, using:
+- The org key: `ORG_KEY` (e.g., `organization11`)
+- The image path: `./assets/organizationN/<ICON_FILE>` (same path used in the config)
+
+Use the Edit tool to insert the new entry in the correct location (next to the existing entries, not at the end of the file unless that is the pattern).
+
+Confirm to the user: "`useOrganization` updated with image entry for `ORG_KEY`."
+
 ### If `LOGO_SOURCE_PATH` is null (no image in folder, or plain JSON input)
 
 Inform the user: "The assets folder `assets/organizationN/` has been created. Please add these image files:

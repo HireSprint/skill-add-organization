@@ -1,13 +1,17 @@
 ---
 name: add-organization
-description: Creates a new organization config file, sets up google-service folder, provisions Supabase resources, and launches the app for verification. Triggered when user passes a JSON file with org data.
+description: Creates a new organization config file, sets up google-service folder, provisions Supabase resources, and launches the app for verification. Triggered when user passes a folder containing a JSON file and a logo image, or a JSON file path directly.
 ---
 
 # Skill: Add Organization
 
 Use this skill when the user wants to add a new organization to the multistore app. The user will provide:
-1. A JSON file path with the new organization's data
+1. A **folder path** containing:
+   - A `.json` file with the organization's data
+   - An image file (`.png`, `.jpg`, `.jpeg`, or `.webp`) as the logo
 2. Optionally, a `google-services.json` file path for Firebase/push notifications
+
+The user can also pass a plain JSON file path (legacy mode) — in that case no logo is auto-copied and the user must add images manually (Step 3 fallback).
 
 ---
 
@@ -43,9 +47,31 @@ If either is missing or empty, stop and inform the user:
 ## Step 0: Read and Validate Input
 
 The user can pass:
+- **A folder** (preferred): `add-organization ./antillana/` — the folder must contain one `.json` file and one image file (`.png`, `.jpg`, `.jpeg`, or `.webp`)
 - A single JSON file: `add-organization ./new-org-data.json`
 - **Multiple JSON files for the same organization**: `add-organization ./store1.json ./store2.json ./store3.json`
 - Or paste the JSON directly in the message
+
+### Folder input detection
+
+If the user passes a folder path (not ending in `.json`), run:
+
+```bash
+ls "<folder_path>"
+```
+
+From the listing, identify:
+- **JSON files** — all `.json` files found, **excluding** `google-services.json`. Store their full paths as an ordered list.
+  - 1 JSON file → single-store mode (same as passing one JSON file)
+  - 2+ JSON files → multi-store mode (same as passing multiple JSON files — see "Multi-file behavior" below)
+- **Logo image** — the **first** image file found with extension `.png`, `.jpg`, `.jpeg`, or `.webp` (alphabetical order). Store its full path as `LOGO_SOURCE_PATH`. Ignore any additional image files.
+
+If no JSON file is found in the folder, stop and inform the user:
+> "No JSON file found in the folder `<folder_path>`. Please make sure the folder contains at least one `.json` file with the organization data."
+
+If no image file is found, set `LOGO_SOURCE_PATH = null` and continue — the user will need to add images manually in Step 3.
+
+Read all detected JSON files and proceed as normal (single or multi-store depending on count).
 
 ### Multi-file behavior
 
@@ -203,13 +229,32 @@ Replace `N` with the actual org number and all placeholders with derived values 
 
 ---
 
-## Step 3: Create Assets Folder
+## Step 3: Create Assets Folder and Copy Logo
 
 Create the assets directory for this organization:
 
 ```bash
 mkdir -p assets/organizationN
 ```
+
+### If `LOGO_SOURCE_PATH` is set (folder input with image detected)
+
+Copy the logo into the assets folder with the correct filename:
+
+```bash
+cp "<LOGO_SOURCE_PATH>" "assets/organizationN/<ICON_FILE>"
+```
+
+- `<ICON_FILE>` is derived from `STORE_NAME_LOWER` (e.g., `antillana.png`). Match the extension of the source image (e.g., if the source is `.jpg`, `ICON_FILE` becomes `antillana.jpg`).
+- This file serves as the **icon**, **backgroundImage**, **iconHeader**, and **splash image** in the config.
+
+After copying, inform the user:
+> "Logo copied to `assets/organizationN/<ICON_FILE>`."
+>
+> Still needed — please add manually:
+> - `<LOGIN_FILE>` (login screen image with transparent background — e.g., `antillanaNoBack.png`)"
+
+### If `LOGO_SOURCE_PATH` is null (no image in folder, or plain JSON input)
 
 Inform the user: "The assets folder `assets/organizationN/` has been created. Please add these image files:
 - `<ICON_FILE>` (app icon and background image — e.g., `antillana.png`)
@@ -487,6 +532,7 @@ After completing all steps, provide a summary:
 ```
 ✓ Config file created/updated: configs/organizationN.js
 ✓ Assets folder created:       assets/organizationN/
+? Logo copied:                 [✓ assets/organizationN/<ICON_FILE> copied / ✗ Add manually]
 ✓ Google service folder:       google-service/organizationN/ (empty — add google-services.json manually)
 ? Supabase project found:      [Found via MCP / Not found — create manually]
 ? SQL schema applied:          [Migration applied / Already existed / Failed]
@@ -503,7 +549,8 @@ After completing all steps, provide a summary:
 ```
 
 **Pending manual actions (remind the user):**
-- Add image assets to `assets/organizationN/`
+- Add `<LOGIN_FILE>` (transparent background version) to `assets/organizationN/` — if not already present
+- If logo was NOT auto-copied: add `<ICON_FILE>` to `assets/organizationN/`
 - Add `google-services.json` to `google-service/organizationN/`
 - Set edge function secrets: `EVENTS_FUNCTION_API_KEY` and `EXPO_ACCESS_TOKEN`
 

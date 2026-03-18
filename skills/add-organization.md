@@ -239,20 +239,28 @@ mkdir -p assets/organizationN
 
 ### If `LOGO_SOURCE_PATH` is set (folder input with image detected)
 
-Copy the logo into the assets folder with the correct filename:
+- `<ICON_FILE>` is derived from `STORE_NAME_LOWER`. Match the extension of the source image (e.g., if the source is `.jpg`, `ICON_FILE` becomes `antillana.jpg`).
+- This file serves as the **icon**, **backgroundImage**, **iconHeader**, and **splash image** in the config.
+
+**Execute** the following using the Bash tool (do not just show it — run it):
 
 ```bash
 cp "<LOGO_SOURCE_PATH>" "assets/organizationN/<ICON_FILE>"
 ```
 
-- `<ICON_FILE>` is derived from `STORE_NAME_LOWER` (e.g., `antillana.png`). Match the extension of the source image (e.g., if the source is `.jpg`, `ICON_FILE` becomes `antillana.jpg`).
-- This file serves as the **icon**, **backgroundImage**, **iconHeader**, and **splash image** in the config.
+Then verify the copy succeeded:
 
-After copying, inform the user:
+```bash
+ls assets/organizationN/
+```
+
+If the file is listed, the copy succeeded. Inform the user:
 > "Logo copied to `assets/organizationN/<ICON_FILE>`."
 >
 > Still needed — please add manually:
 > - `<LOGIN_FILE>` (login screen image with transparent background — e.g., `antillanaNoBack.png`)"
+
+If the copy fails, show the error and stop.
 
 ### If `LOGO_SOURCE_PATH` is null (no image in folder, or plain JSON input)
 

@@ -493,8 +493,9 @@ CREATE POLICY "Enable delete for all users" ON public.quick_access FOR DELETE US
 -- circulars: ALL público
 CREATE POLICY "Allow all operations on circulars" ON public.circulars FOR ALL USING (true) WITH CHECK (true);
 
--- logos: (sin políticas explícitas encontradas, pero RLS habilitado - agrega las tuyas)
--- Por defecto, sin políticas = nadie tiene acceso. Agrega las que necesites.
+-- logos: lectura pública, escritura solo service_role
+CREATE POLICY "Public read logos"        ON public.logos FOR SELECT USING (true);
+CREATE POLICY "Service role logos write" ON public.logos FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- recipes: lectura pública de publicadas, update solo authenticated en publicadas
 CREATE POLICY "Allow public read access to published recipes"      ON public.recipes FOR SELECT              USING (is_published = true);
@@ -606,6 +607,35 @@ CREATE POLICY "storage_resumes_insert"
   ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'job-applications-resumes' AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role']));
 CREATE POLICY "storage_resumes_delete"
   ON storage.objects FOR DELETE USING (bucket_id = 'job-applications-resumes' AND auth.role() = 'service_role');
+
+-- catering
+CREATE POLICY "Public read catering"
+  ON storage.objects FOR SELECT USING (bucket_id = 'catering');
+CREATE POLICY "Auth upload catering"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'catering');
+CREATE POLICY "Auth update catering"
+  ON storage.objects FOR UPDATE USING (bucket_id = 'catering');
+CREATE POLICY "Auth delete catering"
+  ON storage.objects FOR DELETE USING (bucket_id = 'catering');
+
+-- logos
+CREATE POLICY "Public read logos storage"
+  ON storage.objects FOR SELECT USING (bucket_id = 'logos');
+CREATE POLICY "Auth upload logos"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'logos');
+CREATE POLICY "Auth update logos"
+  ON storage.objects FOR UPDATE USING (bucket_id = 'logos');
+CREATE POLICY "Auth delete logos"
+  ON storage.objects FOR DELETE USING (bucket_id = 'logos');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 11: GRANT permisos a roles de app
+-- ─────────────────────────────────────────────────────────────────────────────
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- FIN DEL SCRIPT SQL

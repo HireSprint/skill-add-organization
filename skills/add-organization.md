@@ -489,7 +489,56 @@ Confirm to the user which UUIDs were inserted (or reused) and how the `organizat
 
 ---
 
-## Step 7: Build and Run the App
+## Step 7: Register App in xMaster
+
+After all Supabase provisioning is complete, register the new app in the **xMaster** control panel by calling the `register-app` edge function. This adds a record to `apps_control_apps` in xMaster so the app appears in the dashboard.
+
+The endpoint is always fixed (xMaster project):
+```
+https://ympvynbpqjfukeweioif.supabase.co/functions/v1/register-app
+```
+
+### 7.1 — Call with icon (when LOGO_SOURCE_PATH is set)
+
+Use the Bash tool to run:
+
+```bash
+curl -s -X POST \
+  "https://ympvynbpqjfukeweioif.supabase.co/functions/v1/register-app" \
+  -H "X-Register-Key: b20599c16ba7697bf71a38d77c62edf7ca67ce4146300aacf9ab51fcd4c55461" \
+  -F "name=<STORE_NAME>" \
+  -F "icon=@<LOGO_SOURCE_PATH>"
+```
+
+Replace `<STORE_NAME>` with the value from Step 0.1, `<LOGO_SOURCE_PATH>` with the full path to the logo file, and `<REGISTER_APP_API_KEY>` with the secret configured in xMaster.
+
+### 7.2 — Call without icon (when LOGO_SOURCE_PATH is null)
+
+```bash
+curl -s -X POST \
+  "https://ympvynbpqjfukeweioif.supabase.co/functions/v1/register-app" \
+  -H "X-Register-Key: <REGISTER_APP_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "<STORE_NAME>"}'
+```
+
+### Expected response
+
+```json
+{ "success": true, "app": { "id": "...", "name": "...", "cover_photo_url": "...", ... } }
+```
+
+**If the call succeeds:** inform the user:
+> "App `<STORE_NAME>` registered in xMaster (id: `<app.id>`)."
+
+**If the call fails (non-200 or `success: false`):** show the error but **do not stop** — the org was already provisioned. Inform the user:
+> "Warning: could not register the app in xMaster. You can add it manually by calling the edge function or inserting directly into `apps_control_apps`."
+
+> **Note on `REGISTER_APP_API_KEY`:** This secret must be set once in xMaster's edge function environment. Go to `https://supabase.com/dashboard/project/ympvynbpqjfukeweioif/settings/functions` and add `REGISTER_APP_API_KEY`. If not configured yet, omit the `-H "X-Register-Key: ..."` header (the function will accept any request when the secret is empty).
+
+---
+
+## Step 8: Build and Run the App
 
 Once all files are in place, run these commands sequentially in the terminal. Replace `N` with the org number from Step 1.
 
@@ -572,6 +621,7 @@ After completing all steps, provide a summary:
   - <STORE_NAME>: <uuid>  (inserted | already existed)
   - ...
 ✓ Config updated:              organizations[] now has N entries with id_store_supabase UUIDs
+? xMaster registration:        [✓ App registered in xMaster (id: <uuid>) / ✗ Manual registration needed]
 ✓ Prebuild iOS:                ORGANIZATION=organizationN yarn prebuild:ios
 ✓ App launched (iOS):          ORGANIZATION=organizationN yarn ios
 ✓ Prebuild Android:            ORGANIZATION=organizationN yarn prebuild:android
@@ -583,6 +633,7 @@ After completing all steps, provide a summary:
 - If logo was NOT auto-copied: add `<ICON_FILE>` to `assets/organizationN/`
 - Add `google-services.json` to `google-service/organizationN/`
 - Set edge function secrets: `EVENTS_FUNCTION_API_KEY` and `EXPO_ACCESS_TOKEN`
+- Set `REGISTER_APP_API_KEY` in xMaster's edge function settings (one-time, shared across all orgs): `https://supabase.com/dashboard/project/ympvynbpqjfukeweioif/settings/functions`
 
 ---
 

@@ -1,0 +1,613 @@
+-- =============================================================================
+-- SUPABASE PROJECT CLONE SCRIPT
+-- Clona la estructura completa del proyecto "City Fresh" a un nuevo proyecto
+-- =============================================================================
+-- INSTRUCCIONES:
+-- 1. Crea un nuevo proyecto en Supabase Dashboard
+-- 2. Ve a SQL Editor en el nuevo proyecto
+-- 3. Ejecuta este script COMPLETO en orden
+-- 4. Después, despliega las Edge Functions por separado (ver script bash)
+-- =============================================================================
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 1: EXTENSIONES (solo las que están realmente instaladas)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- plpgsql, pg_graphql, pg_stat_statements, uuid-ossp, pgcrypto, supabase_vault
+-- ya vienen habilitadas por defecto en todo proyecto Supabase.
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 2: FUNCIONES (triggers helpers)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, created_at, updated_at)
+  VALUES (NEW.id, NEW.email, now(), now())
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 3: TABLAS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 3.1 stores (tabla raíz, muchas FK apuntan aquí)
+CREATE TABLE IF NOT EXISTS public.stores (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL,
+  address    TEXT NOT NULL,
+  city       TEXT NOT NULL,
+  state      TEXT NOT NULL,
+  zip_code   TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  phone      TEXT,
+  email      TEXT,
+  lat        TEXT,
+  log        TEXT,
+  UNIQUE (name, address)
+);
+
+-- 3.2 profiles
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id                      UUID PRIMARY KEY REFERENCES auth.users(id),
+  email                   TEXT,
+  first_name              TEXT,
+  last_name               TEXT,
+  phone                   TEXT,
+  region                  TEXT,
+  address_line1           TEXT,
+  address_line2           TEXT,
+  city                    TEXT,
+  state                   TEXT,
+  zip_code                TEXT,
+  latitude                DOUBLE PRECISION,
+  longitude               DOUBLE PRECISION,
+  id_store                UUID REFERENCES public.stores(id),
+  prefered_language       TEXT,
+  push_token              TEXT,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  date_of_birth           TEXT,
+  profile_image_path      TEXT,
+  profile_picture_url     TEXT,
+  email_sms_consent       BOOLEAN DEFAULT false,
+  whatsapp_consent        BOOLEAN DEFAULT false,
+  is_senior               BOOLEAN,
+  senior_id_image_path    TEXT,
+  is_verified_senior      BOOLEAN,
+  senior_id_review_status TEXT,
+  has_read_shopping_terms BOOLEAN DEFAULT false,
+  loyalty_points          TEXT
+);
+
+-- 3.3 shopping_lists
+CREATE TABLE IF NOT EXISTS public.shopping_lists (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID NOT NULL REFERENCES public.profiles(id),
+  content        TEXT NOT NULL DEFAULT '',
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  title          TEXT NOT NULL DEFAULT 'Shopping List',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  delivery_date  DATE,
+  delivery_time  TIME WITHOUT TIME ZONE,
+  is_delivery    BOOLEAN DEFAULT false,
+  status         TEXT,
+  id_store       UUID REFERENCES public.stores(id)
+);
+
+-- 3.4 loyalty_cards
+CREATE TABLE IF NOT EXISTS public.loyalty_cards (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL UNIQUE REFERENCES auth.users(id),
+  card_number TEXT NOT NULL,
+  card_type   TEXT,
+  points      INTEGER DEFAULT 0,
+  is_active   BOOLEAN DEFAULT true,
+  barcode_url TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3.5 events
+CREATE TABLE IF NOT EXISTS public.events (
+  id                    BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  event_name            TEXT,
+  event_date            TIMESTAMPTZ,
+  event_image           TEXT,
+  event_desc            TEXT,
+  event_addres          TEXT,
+  event_lat             NUMERIC,
+  event_long            NUMERIC,
+  is_published          BOOLEAN,
+  publish_scheduled_at  TIMESTAMPTZ,
+  published_at          TIMESTAMPTZ,
+  id_store              UUID REFERENCES public.stores(id)
+);
+
+-- 3.6 banners
+CREATE TABLE IF NOT EXISTS public.banners (
+  id            BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMP WITHOUT TIME ZONE,
+  image_url     TEXT,
+  title         TEXT,
+  description   TEXT,
+  selected      BOOLEAN,
+  display_order INTEGER,
+  is_active     BOOLEAN,
+  id_client     BIGINT,
+  id_store      UUID REFERENCES public.stores(id),
+  screen        TEXT DEFAULT 'sm'
+);
+
+-- 3.7 catering_menus
+CREATE TABLE IF NOT EXISTS public.catering_menus (
+  id                    TEXT PRIMARY KEY,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  title_key             TEXT,
+  short_description_key TEXT,
+  long_description_key  TEXT,
+  price_per_person      TEXT,
+  updated_at            TIMESTAMP WITHOUT TIME ZONE,
+  image_url             TEXT,
+  starters              TEXT[] DEFAULT '{}',
+  mains                 TEXT[] DEFAULT '{}',
+  desserts              TEXT[] DEFAULT '{}',
+  is_available          BOOLEAN,
+  catering_type         TEXT,
+  id_store              UUID REFERENCES public.stores(id)
+);
+
+-- 3.8 quick_access
+CREATE TABLE IF NOT EXISTS public.quick_access (
+  id            BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  updated_at    TIMESTAMPTZ DEFAULT now(),
+  name          TEXT NOT NULL,
+  url           TEXT NOT NULL,
+  icon_url      TEXT,
+  icon_name     TEXT,
+  id_client     BIGINT,
+  display_order INTEGER DEFAULT 0,
+  is_active     BOOLEAN DEFAULT true,
+  selected      BOOLEAN DEFAULT false,
+  id_store      UUID REFERENCES public.stores(id)
+);
+
+-- 3.9 catering_requests
+CREATE TABLE IF NOT EXISTS public.catering_requests (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL,
+  plan              TEXT,
+  dietary           TEXT[],
+  notes             TEXT,
+  event_date        DATE,
+  event_time        TEXT,
+  guest_count       INTEGER,
+  event_type        TEXT,
+  estimate_total    NUMERIC,
+  status            TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status = ANY (ARRAY['pending', 'confirmed', 'cancelled'])),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ,
+  price_per_person  NUMERIC,
+  total_cost        NUMERIC,
+  address_line1     TEXT,
+  address_line2     TEXT,
+  city              TEXT,
+  state             TEXT,
+  zip_code          TEXT,
+  catering_menu_id  TEXT NOT NULL,
+  id_store          UUID REFERENCES public.stores(id)
+);
+
+-- 3.10 circulars
+CREATE TABLE IF NOT EXISTS public.circulars (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id         UUID NOT NULL REFERENCES public.stores(id),
+  circular_number  INTEGER NOT NULL,
+  pdf_urls         TEXT[] NOT NULL DEFAULT '{}',
+  is_active        BOOLEAN DEFAULT false,
+  id_circular      INTEGER,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (store_id, circular_number)
+);
+
+-- 3.11 logos
+CREATE TABLE IF NOT EXISTS public.logos (
+  id         BIGSERIAL PRIMARY KEY,
+  image_url  TEXT NOT NULL,
+  title      TEXT,
+  description TEXT,
+  is_active  BOOLEAN DEFAULT true,
+  id_client  BIGINT,
+  id_store   UUID NOT NULL REFERENCES public.stores(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+COMMENT ON TABLE  public.logos IS 'Logos por tienda para la app de Shopping List';
+COMMENT ON COLUMN public.logos.image_url IS 'URL pública del logo en Supabase Storage';
+COMMENT ON COLUMN public.logos.id_store IS 'ID de la tienda (FK a stores.id)';
+
+-- 3.12 recipes
+CREATE TABLE IF NOT EXISTS public.recipes (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title              TEXT NOT NULL,
+  steps              TEXT[] NOT NULL,
+  ingredients        TEXT[] NOT NULL,
+  prep_time_minutes  INTEGER CHECK (prep_time_minutes IS NULL OR prep_time_minutes >= 0),
+  cook_time_minutes  INTEGER CHECK (cook_time_minutes IS NULL OR cook_time_minutes >= 0),
+  servings           INTEGER CHECK (servings IS NULL OR servings > 0),
+  tags               TEXT[] NOT NULL DEFAULT '{}',
+  is_published       BOOLEAN NOT NULL DEFAULT false,
+  image_path         TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id_store           UUID REFERENCES public.stores(id),
+  nutrition_info     JSONB,
+  likes              INTEGER NOT NULL DEFAULT 0,
+  dislikes           INTEGER NOT NULL DEFAULT 0
+);
+
+-- 3.13 recipe_votes
+CREATE TABLE IF NOT EXISTS public.recipe_votes (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id  UUID NOT NULL REFERENCES public.recipes(id),
+  user_id    UUID NOT NULL REFERENCES auth.users(id),
+  vote       TEXT NOT NULL CHECK (vote = ANY (ARRAY['like', 'dislike'])),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (recipe_id, user_id)
+);
+
+-- 3.14 recipe_favorites
+CREATE TABLE IF NOT EXISTS public.recipe_favorites (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id  UUID NOT NULL REFERENCES public.recipes(id),
+  user_id    UUID NOT NULL REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (recipe_id, user_id)
+);
+
+-- 3.15 job_applications
+CREATE TABLE IF NOT EXISTS public.job_applications (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_store              UUID NOT NULL REFERENCES public.stores(id),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  first_name            TEXT NOT NULL,
+  last_name             TEXT NOT NULL,
+  gender                TEXT,
+  date_of_birth         DATE,
+  email                 TEXT NOT NULL,
+  street_address        TEXT NOT NULL,
+  state                 TEXT NOT NULL,
+  city                  TEXT NOT NULL,
+  zip_code              TEXT NOT NULL,
+  phone_number          TEXT NOT NULL,
+  desired_position      TEXT,
+  desired_salary        TEXT,
+  days_available        JSONB NOT NULL DEFAULT '{}',
+  citizen_us            BOOLEAN,
+  authorized_to_work_us BOOLEAN,
+  job_type              TEXT CHECK (job_type = ANY (ARRAY['part-time', 'full-time'])),
+  attend_school         BOOLEAN,
+  school_days           JSONB NOT NULL DEFAULT '{}',
+  has_referral          BOOLEAN,
+  referral_name         TEXT,
+  references_info       JSONB NOT NULL DEFAULT '[]',
+  employment_info       JSONB NOT NULL DEFAULT '{}',
+  contact_supervisor    BOOLEAN,
+  resume_url            TEXT
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 4: ÍNDICES ADICIONALES (los primary keys ya se crearon arriba)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE INDEX IF NOT EXISTS idx_circulars_store_id    ON public.circulars (store_id);
+CREATE INDEX IF NOT EXISTS idx_circulars_is_active   ON public.circulars (is_active);
+CREATE INDEX IF NOT EXISTS idx_circulars_id_circular ON public.circulars (id_circular);
+CREATE INDEX IF NOT EXISTS idx_logos_id_store         ON public.logos (id_store);
+CREATE INDEX IF NOT EXISTS idx_logos_is_active        ON public.logos (is_active);
+CREATE INDEX IF NOT EXISTS job_applications_store_idx ON public.job_applications (id_store);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 5: TRIGGERS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Auto-create profile on auth signup
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- Auto-update updated_at
+CREATE OR REPLACE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE TRIGGER set_loyalty_cards_updated_at
+  BEFORE UPDATE ON public.loyalty_cards
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE TRIGGER update_circulars_updated_at
+  BEFORE UPDATE ON public.circulars
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE OR REPLACE TRIGGER set_recipes_updated_at
+  BEFORE UPDATE ON public.recipes
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE TRIGGER set_recipe_votes_updated_at
+  BEFORE UPDATE ON public.recipe_votes
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 6: RPC FUNCTION (vote_recipe)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.vote_recipe(p_recipe_id UUID, p_vote TEXT)
+RETURNS TABLE(recipe_id UUID, likes INTEGER, dislikes INTEGER, user_vote TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user UUID;
+BEGIN
+  v_user := auth.uid();
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  IF p_vote NOT IN ('like','dislike') THEN
+    RAISE EXCEPTION 'Invalid vote';
+  END IF;
+
+  INSERT INTO public.recipe_votes (recipe_id, user_id, vote)
+  VALUES (p_recipe_id, v_user, p_vote)
+  ON CONFLICT (recipe_id, user_id) DO UPDATE
+    SET vote = EXCLUDED.vote,
+        updated_at = now();
+
+  UPDATE public.recipes r
+  SET
+    likes    = (SELECT count(*)::int FROM public.recipe_votes rv WHERE rv.recipe_id = p_recipe_id AND rv.vote = 'like'),
+    dislikes = (SELECT count(*)::int FROM public.recipe_votes rv WHERE rv.recipe_id = p_recipe_id AND rv.vote = 'dislike')
+  WHERE r.id = p_recipe_id;
+
+  RETURN QUERY
+  SELECT
+    p_recipe_id,
+    (SELECT count(*)::int FROM public.recipe_votes rv WHERE rv.recipe_id = p_recipe_id AND rv.vote = 'like'),
+    (SELECT count(*)::int FROM public.recipe_votes rv WHERE rv.recipe_id = p_recipe_id AND rv.vote = 'dislike'),
+    p_vote;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 7: ROW LEVEL SECURITY (RLS) - HABILITAR
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.stores             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shopping_lists     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_cards      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.banners            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catering_menus     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quick_access       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catering_requests  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.circulars          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.logos              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipes            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipe_votes       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipe_favorites   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.job_applications   ENABLE ROW LEVEL SECURITY;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 8: POLÍTICAS RLS - TABLAS PÚBLICAS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- stores: solo lectura para anon y authenticated
+CREATE POLICY "Allow anonymous users to read stores"    ON public.stores FOR SELECT TO anon          USING (true);
+CREATE POLICY "Allow authenticated users to read stores" ON public.stores FOR SELECT TO authenticated USING (true);
+
+-- profiles: solo el propio usuario
+CREATE POLICY "profiles_select_own" ON public.profiles FOR SELECT USING (id = auth.uid());
+CREATE POLICY "profiles_insert_own" ON public.profiles FOR INSERT WITH CHECK (id = auth.uid());
+CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE USING (id = auth.uid());
+
+-- shopping_lists: solo el propio usuario
+CREATE POLICY "Allow read own shopping list"   ON public.shopping_lists FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Allow insert own shopping list" ON public.shopping_lists FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Allow update own shopping list" ON public.shopping_lists FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Allow delete own shopping list" ON public.shopping_lists FOR DELETE USING (user_id = auth.uid());
+
+-- loyalty_cards: solo el propio usuario (authenticated)
+CREATE POLICY "Users can read own loyalty cards"   ON public.loyalty_cards FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own loyalty cards" ON public.loyalty_cards FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own loyalty cards" ON public.loyalty_cards FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own loyalty cards" ON public.loyalty_cards FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+-- banners: CRUD público
+CREATE POLICY "Access to read"              ON public.banners FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.banners FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.banners FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON public.banners FOR DELETE USING (true);
+
+-- events: CRUD público
+CREATE POLICY "Access to read"              ON public.events FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.events FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON public.events FOR DELETE USING (true);
+
+-- catering_menus: CRUD público
+CREATE POLICY "Access to read"              ON public.catering_menus FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.catering_menus FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.catering_menus FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON public.catering_menus FOR DELETE USING (true);
+
+-- catering_requests: CRUD público
+CREATE POLICY "Access to read"              ON public.catering_requests FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.catering_requests FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.catering_requests FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON public.catering_requests FOR DELETE USING (true);
+
+-- quick_access: CRUD público
+CREATE POLICY "Access to read"              ON public.quick_access FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON public.quick_access FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable update for all users" ON public.quick_access FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON public.quick_access FOR DELETE USING (true);
+
+-- circulars: ALL público
+CREATE POLICY "Allow all operations on circulars" ON public.circulars FOR ALL USING (true) WITH CHECK (true);
+
+-- logos: (sin políticas explícitas encontradas, pero RLS habilitado - agrega las tuyas)
+-- Por defecto, sin políticas = nadie tiene acceso. Agrega las que necesites.
+
+-- recipes: lectura pública de publicadas, update solo authenticated en publicadas
+CREATE POLICY "Allow public read access to published recipes"      ON public.recipes FOR SELECT              USING (is_published = true);
+CREATE POLICY "Allow authenticated vote on published recipes"      ON public.recipes FOR UPDATE TO authenticated USING (is_published = true) WITH CHECK (is_published = true);
+
+-- recipe_votes: solo el propio usuario (authenticated)
+CREATE POLICY "Users can read own recipe votes"   ON public.recipe_votes FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can insert own recipe votes" ON public.recipe_votes FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update own recipe votes" ON public.recipe_votes FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- recipe_favorites: solo el propio usuario (authenticated)
+CREATE POLICY "Users can read own recipe favorites"   ON public.recipe_favorites FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can insert own recipe favorites" ON public.recipe_favorites FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete own recipe favorites" ON public.recipe_favorites FOR DELETE TO authenticated USING (user_id = auth.uid());
+
+-- job_applications: insert para todos, select solo service_role
+CREATE POLICY "job_applications_insert_all"           ON public.job_applications FOR INSERT WITH CHECK (auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role']));
+CREATE POLICY "job_applications_select_service_role"  ON public.job_applications FOR SELECT USING (auth.role() = 'service_role');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 9: STORAGE BUCKETS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+INSERT INTO storage.buckets (id, name, public) VALUES ('profile-images',           'profile-images',           true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('barcodes',                 'barcodes',                 true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('circulars',                'circulars',                true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('events',                   'events',                   true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('banner',                   'banner',                   true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('senior-ids',               'senior-ids',               true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('catering',                 'catering',                 true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('logos',                    'logos',                    true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('recipes',                  'recipes',                  true)  ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('job-applications-resumes', 'job-applications-resumes', false) ON CONFLICT (id) DO NOTHING;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PASO 10: STORAGE POLICIES
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- profile-images
+CREATE POLICY "Profile images are publicly accessible"
+  ON storage.objects FOR SELECT USING (bucket_id = 'profile-images');
+CREATE POLICY "Users can upload their own profile images"
+  ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'profile-images' AND (storage.foldername(name))[1] = (auth.uid())::text);
+CREATE POLICY "Users can update their own profile images"
+  ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'profile-images' AND (storage.foldername(name))[1] = (auth.uid())::text);
+CREATE POLICY "Users can delete their own profile images"
+  ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'profile-images' AND (storage.foldername(name))[1] = (auth.uid())::text);
+
+-- barcodes
+CREATE POLICY "Barcodes are publicly accessible"
+  ON storage.objects FOR SELECT USING (bucket_id = 'barcodes');
+CREATE POLICY "Users can upload their own barcode"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'barcodes' AND (auth.uid())::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can update their own barcode"
+  ON storage.objects FOR UPDATE USING (bucket_id = 'barcodes' AND (auth.uid())::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can delete their own barcode"
+  ON storage.objects FOR DELETE USING (bucket_id = 'barcodes' AND (auth.uid())::text = (storage.foldername(name))[1]);
+
+-- circulars
+CREATE POLICY "Public Access for circulars"
+  ON storage.objects FOR SELECT USING (bucket_id = 'circulars');
+CREATE POLICY "Authenticated users can upload circulars"
+  ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'circulars');
+CREATE POLICY "Authenticated users can update circulars"
+  ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'circulars');
+CREATE POLICY "Authenticated users can delete circulars"
+  ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'circulars');
+
+-- events
+CREATE POLICY "Allow public read access to event images"
+  ON storage.objects FOR SELECT USING (bucket_id = 'events');
+CREATE POLICY "Allow public uploads to events bucket"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'events');
+
+-- banner
+CREATE POLICY "Allow public to read banners"
+  ON storage.objects FOR SELECT USING (bucket_id = 'banner');
+CREATE POLICY "Allow public uploads to banner bucket"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'banner');
+CREATE POLICY "Allow public to update banners"
+  ON storage.objects FOR UPDATE USING (bucket_id = 'banner');
+CREATE POLICY "Allow public to delete banners"
+  ON storage.objects FOR DELETE USING (bucket_id = 'banner');
+
+-- senior-ids
+CREATE POLICY "senior_ids_manage_own_select"
+  ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'senior-ids' AND position((auth.uid())::text || '/' in name) = 1);
+CREATE POLICY "senior_ids_manage_own_insert"
+  ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'senior-ids' AND position((auth.uid())::text || '/' in name) = 1);
+CREATE POLICY "senior_ids_manage_own_update"
+  ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'senior-ids' AND position((auth.uid())::text || '/' in name) = 1);
+CREATE POLICY "senior_ids_manage_own_delete"
+  ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'senior-ids' AND position((auth.uid())::text || '/' in name) = 1);
+
+-- recipes
+CREATE POLICY "recipes_bucket_public_read"
+  ON storage.objects FOR SELECT USING (bucket_id = 'recipes');
+CREATE POLICY "recipes_bucket_authenticated_insert"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'recipes' AND auth.role() = 'authenticated');
+CREATE POLICY "recipes_bucket_authenticated_update"
+  ON storage.objects FOR UPDATE USING (bucket_id = 'recipes' AND auth.role() = 'authenticated') WITH CHECK (bucket_id = 'recipes' AND auth.role() = 'authenticated');
+CREATE POLICY "recipes_bucket_authenticated_delete"
+  ON storage.objects FOR DELETE USING (bucket_id = 'recipes' AND auth.role() = 'authenticated');
+
+-- job-applications-resumes
+CREATE POLICY "storage_resumes_select"
+  ON storage.objects FOR SELECT USING (bucket_id = 'job-applications-resumes' AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role']));
+CREATE POLICY "storage_resumes_insert"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'job-applications-resumes' AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role']));
+CREATE POLICY "storage_resumes_delete"
+  ON storage.objects FOR DELETE USING (bucket_id = 'job-applications-resumes' AND auth.role() = 'service_role');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FIN DEL SCRIPT SQL
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Siguiente paso: ejecutar deploy-edge-functions.sh para desplegar Edge Functions

@@ -341,7 +341,7 @@ All provisioning is done via the **Supabase MCP** — no CLI or psql required.
 
 Read the full SQL file:
 ```
-Read: script supabase/scripts/clone-supabase-project.sql
+Read: scripts/clone-supabase-project.sql
 ```
 
 Then execute it against the target project using the MCP:
@@ -372,11 +372,11 @@ If tables already exist, inform the user and skip to 6.2 (they may have already 
 
 ### 6.2 Deploy Edge Functions
 
-The source code for all 6 edge functions lives inside this skill project, in the `edge-functions/` folder. Read each file and deploy it using the MCP.
+The source code for all 6 edge functions lives inside this skill project, in the `scripts/edge-functions/` folder. Read each file and deploy it using the MCP.
 
 For each function, first read the file:
 ```
-Read: edge-functions/<function_name>/index.ts
+Read: scripts/edge-functions/<function_name>/index.ts
 ```
 
 Then deploy using:
@@ -390,14 +390,14 @@ mcp: deploy_edge_function
 
 Deploy all 6 functions with these settings:
 
-| Function name          | File path                                      | verify_jwt |
-|------------------------|------------------------------------------------|------------|
-| `create-store-folders` | `edge-functions/create-store-folders/index.ts` | `true`     |
-| `loyalty-barcodes`     | `edge-functions/loyalty-barcodes/index.ts`     | `true`     |
-| `send-notification`    | `edge-functions/send-notification/index.ts`    | `true`     |
-| `delete-account`       | `edge-functions/delete-account/index.ts`       | `true`     |
-| `create-event`         | `edge-functions/create-event/index.ts`         | `false`    |
-| `updateShoppingStatus` | `edge-functions/updateShoppingStatus/index.ts` | `false`    |
+| Function name          | File path                                              | verify_jwt |
+|------------------------|--------------------------------------------------------|------------|
+| `create-store-folders` | `scripts/edge-functions/create-store-folders/index.ts` | `true`     |
+| `loyalty-barcodes`     | `scripts/edge-functions/loyalty-barcodes/index.ts`     | `true`     |
+| `send-notification`    | `scripts/edge-functions/send-notification/index.ts`    | `true`     |
+| `delete-account`       | `scripts/edge-functions/delete-account/index.ts`       | `true`     |
+| `create-event`         | `scripts/edge-functions/create-event/index.ts`         | `false`    |
+| `updateShoppingStatus` | `scripts/edge-functions/updateShoppingStatus/index.ts` | `false`    |
 
 ### 6.3 Set required secrets
 
